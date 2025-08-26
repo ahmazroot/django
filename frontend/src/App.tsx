@@ -1,7 +1,6 @@
-
-import React, { useState, useEffect, useRef } from 'react';
-import axios from 'axios';
-import './App.css';
+import React, { useState, useEffect, useRef } from "react";
+import axios from "axios";
+import "./App.css";
 
 interface ChatMessage {
   id: string;
@@ -24,10 +23,10 @@ interface TenantInfo {
 
 const App: React.FC = () => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [currentMessage, setCurrentMessage] = useState('');
+  const [currentMessage, setCurrentMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [tenantInfo, setTenantInfo] = useState<TenantInfo | null>(null);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -45,19 +44,19 @@ const App: React.FC = () => {
 
   const fetchTenantInfo = async () => {
     try {
-      const response = await axios.get('/api/tenant/info/');
+      const response = await axios.get("/api/tenant/info/");
       setTenantInfo(response.data.tenant);
     } catch (err) {
-      console.error('Error fetching tenant info:', err);
+      console.error("Error fetching tenant info:", err);
     }
   };
 
   const fetchChatHistory = async () => {
     try {
-      const response = await axios.get('/api/chat/history/?limit=50');
+      const response = await axios.get("/api/chat/history/?limit=50");
       setMessages(response.data.messages.reverse());
     } catch (err) {
-      console.error('Error fetching chat history:', err);
+      console.error("Error fetching chat history:", err);
     }
   };
 
@@ -66,33 +65,35 @@ const App: React.FC = () => {
     if (!currentMessage.trim()) return;
 
     setIsLoading(true);
-    setError('');
+    setError("");
 
     const userMessage = currentMessage;
-    setCurrentMessage('');
+    setCurrentMessage("");
 
     // Add user message to chat immediately
     const tempMessage: ChatMessage = {
-      id: 'temp-' + Date.now(),
+      id: "temp-" + Date.now(),
       prompt: userMessage,
-      response: '',
+      response: "",
       created_at: new Date().toISOString(),
-      model: '',
+      model: "",
       tokens_used: 0,
-      response_time_ms: 0
+      response_time_ms: 0,
     };
-    setMessages(prev => [...prev, tempMessage]);
+    setMessages((prev: any) => [...prev, tempMessage]);
 
     try {
-      const response = await axios.post('/api/chat/call/', {
+      const response = await axios.post("/api/chat/call/", {
         prompt: userMessage,
-        model: 'gpt-3.5-turbo'
+        model: "openai",
       });
 
       if (response.data.success) {
         // Remove temp message and add real message
-        setMessages(prev => prev.filter(msg => msg.id !== tempMessage.id));
-        
+        setMessages((prev: any[]) =>
+          prev.filter((msg: { id: string }) => msg.id !== tempMessage.id)
+        );
+
         const newMessage: ChatMessage = {
           id: response.data.message_id,
           prompt: response.data.prompt,
@@ -100,26 +101,28 @@ const App: React.FC = () => {
           created_at: new Date().toISOString(),
           model: response.data.model,
           tokens_used: 1,
-          response_time_ms: response.data.response_time_ms || 0
+          response_time_ms: response.data.response_time_ms || 0,
         };
-        
-        setMessages(prev => [...prev, newMessage]);
-        
+
+        setMessages((prev: any) => [...prev, newMessage]);
+
         // Update tenant info
         if (tenantInfo) {
           setTenantInfo({
             ...tenantInfo,
             tokens_used: tenantInfo.tokens_used + 1,
-            tokens_remaining: tenantInfo.tokens_remaining - 1
+            tokens_remaining: tenantInfo.tokens_remaining - 1,
           });
         }
       } else {
-        throw new Error('Failed to send message');
+        throw new Error("Failed to send message");
       }
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Error sending message');
+      setError(err.response?.data?.message || "Error sending message");
       // Remove temp message on error
-      setMessages(prev => prev.filter(msg => msg.id !== tempMessage.id));
+      setMessages((prev: any[]) =>
+        prev.filter((msg: { id: string }) => msg.id !== tempMessage.id)
+      );
     } finally {
       setIsLoading(false);
     }
@@ -130,15 +133,15 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="app">
-      <div className="chat-container">
+    <div className='app'>
+      <div className='chat-container'>
         {/* Header */}
-        <div className="chat-header">
+        <div className='chat-header'>
           <h1>💬 Multi-Tenant Chat</h1>
           {tenantInfo && (
-            <div className="tenant-info">
-              <span className="tenant-name">{tenantInfo.name}</span>
-              <span className="token-info">
+            <div className='tenant-info'>
+              <span className='tenant-name'>{tenantInfo.name}</span>
+              <span className='token-info'>
                 Tokens: {tenantInfo.tokens_used}/{tenantInfo.tokens_limit}
               </span>
             </div>
@@ -146,45 +149,60 @@ const App: React.FC = () => {
         </div>
 
         {/* Messages */}
-        <div className="messages-container">
+        <div className='messages-container'>
           {messages.length === 0 && !isLoading && (
-            <div className="welcome-message">
+            <div className='welcome-message'>
               <h3>👋 Welcome to Multi-Tenant Chat!</h3>
               <p>Start a conversation by typing a message below.</p>
             </div>
           )}
-          
-          {messages.map((message) => (
-            <div key={message.id} className="message-group">
-              <div className="message user-message">
-                <div className="message-content">
-                  <strong>You:</strong> {message.prompt}
-                </div>
-                <div className="message-time">{formatTime(message.created_at)}</div>
-              </div>
-              
-              {message.response && (
-                <div className="message ai-message">
-                  <div className="message-content">
-                    <strong>AI:</strong> {message.response}
+
+          {messages.map(
+            (message: {
+              id: any;
+              prompt: any;
+              created_at: string;
+              response: any;
+              response_time_ms: number;
+            }) => (
+              <div
+                key={message.id}
+                className='message-group'
+              >
+                <div className='message user-message'>
+                  <div className='message-content'>
+                    <strong>You:</strong> {message.prompt}
                   </div>
-                  <div className="message-meta">
-                    <span className="message-time">{formatTime(message.created_at)}</span>
-                    {message.response_time_ms > 0 && (
-                      <span className="response-time">
-                        ({message.response_time_ms}ms)
+                  <div className='message-time'>
+                    {formatTime(message.created_at)}
+                  </div>
+                </div>
+
+                {message.response && (
+                  <div className='message ai-message'>
+                    <div className='message-content'>
+                      <strong>AI:</strong> {message.response}
+                    </div>
+                    <div className='message-meta'>
+                      <span className='message-time'>
+                        {formatTime(message.created_at)}
                       </span>
-                    )}
+                      {message.response_time_ms > 0 && (
+                        <span className='response-time'>
+                          ({message.response_time_ms}ms)
+                        </span>
+                      )}
+                    </div>
                   </div>
-                </div>
-              )}
-            </div>
-          ))}
-          
+                )}
+              </div>
+            )
+          )}
+
           {isLoading && (
-            <div className="message ai-message loading">
-              <div className="message-content">
-                <div className="typing-indicator">
+            <div className='message ai-message loading'>
+              <div className='message-content'>
+                <div className='typing-indicator'>
                   <span></span>
                   <span></span>
                   <span></span>
@@ -192,34 +210,35 @@ const App: React.FC = () => {
               </div>
             </div>
           )}
-          
+
           <div ref={messagesEndRef} />
         </div>
 
         {/* Error */}
-        {error && (
-          <div className="error-message">
-            ⚠️ {error}
-          </div>
-        )}
+        {error && <div className='error-message'>⚠️ {error}</div>}
 
         {/* Input */}
-        <form onSubmit={sendMessage} className="message-form">
-          <div className="input-container">
+        <form
+          onSubmit={sendMessage}
+          className='message-form'
+        >
+          <div className='input-container'>
             <input
-              type="text"
+              type='text'
               value={currentMessage}
-              onChange={(e) => setCurrentMessage(e.target.value)}
-              placeholder="Type your message here..."
+              onChange={(e: { target: { value: any } }) =>
+                setCurrentMessage(e.target.value)
+              }
+              placeholder='Type your message here...'
               disabled={isLoading}
-              className="message-input"
+              className='message-input'
             />
             <button
-              type="submit"
+              type='submit'
               disabled={isLoading || !currentMessage.trim()}
-              className="send-button"
+              className='send-button'
             >
-              {isLoading ? '⏳' : '📤'}
+              {isLoading ? "⏳" : "📤"}
             </button>
           </div>
         </form>

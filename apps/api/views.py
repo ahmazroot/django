@@ -45,9 +45,11 @@ def chat_call(request):
             }, status=400)
         
         # Optional parameters
-        model = data.get('model', 'gpt-3.5-turbo')
+        model = data.get('model', 'openai')
         seed = data.get('seed', None)
         customer_id = data.get('customer_id', None)
+        private = data.get('private', False)
+        referrer = data.get('referrer', None)
         
         # Get customer data if provided
         customer_data = None
@@ -61,15 +63,21 @@ def chat_call(request):
                 pass
         
         # Prepare external API call
-        external_api_url = f"https://text.uuuuai.ai/{user_prompt}"
+        external_api_url = "https://text.uuuu.ai/openai"
+        print(tenant.system_parameter)
         api_payload = {
-            'prompt': user_prompt,
-            'system': tenant.system_parameter,
-            'model': model
+            'model': model,
+            'messages': [
+                {'role': 'system', 'content': tenant.system_parameter},
+                {'role': 'user', 'content': user_prompt}
+            ],
+            'seed': seed
         }
         
-        if seed:
-            api_payload['seed'] = seed
+        if private:
+            api_payload['private'] = private
+        if referrer:
+            api_payload['referrer'] = referrer
         
         # Make API call and measure response time
         start_time = time.time()
@@ -86,7 +94,8 @@ def chat_call(request):
             response_time_ms = int((time.time() - start_time) * 1000)
             
             if response.status_code == 200:
-                ai_response = response.text
+                result = response.json()
+                ai_response = result['choices'][0]['message']['content']
             else:
                 ai_response = f"API Error: {response.status_code} - {response.text}"
                 
@@ -132,6 +141,7 @@ def chat_call(request):
             'error': 'Internal server error',
             'message': str(e)
         }, status=500)
+
 
 
 @csrf_exempt
