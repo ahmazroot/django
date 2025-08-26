@@ -1,5 +1,6 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import axios from 'axios';
 import './App.css';
 
 interface ChatMessage {
@@ -19,186 +20,212 @@ interface TenantInfo {
   tokens_used: number;
   tokens_limit: number;
   tokens_remaining: number;
-  system_parameter: string;
 }
 
-function App() {
+const App: React.FC = () => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [prompt, setPrompt] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [currentMessage, setCurrentMessage] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   const [tenantInfo, setTenantInfo] = useState<TenantInfo | null>(null);
-  const [model, setModel] = useState('gpt-3.5-turbo');
-  const [seed, setSeed] = useState('');
+  const [error, setError] = useState('');
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:3000';
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
 
   useEffect(() => {
-    loadTenantInfo();
-    loadChatHistory();
+    scrollToBottom();
+  }, [messages]);
+
+  useEffect(() => {
+    fetchTenantInfo();
+    fetchChatHistory();
   }, []);
 
-  const loadTenantInfo = async () => {
+  const fetchTenantInfo = async () => {
     try {
-      const response = await fetch(`${API_BASE}/api/tenant/info/`);
-      if (response.ok) {
-        const data = await response.json();
-        setTenantInfo(data.tenant);
-      }
-    } catch (error) {
-      console.error('Error loading tenant info:', error);
+      const response = await axios.get('/api/tenant/info/');
+      setTenantInfo(response.data.tenant);
+    } catch (err) {
+      console.error('Error fetching tenant info:', err);
     }
   };
 
-  const loadChatHistory = async () => {
+  const fetchChatHistory = async () => {
     try {
-      const response = await fetch(`${API_BASE}/api/chat/history/?limit=20`);
-      if (response.ok) {
-        const data = await response.json();
-        setMessages(data.messages);
-      }
-    } catch (error) {
-      console.error('Error loading chat history:', error);
+      const response = await axios.get('/api/chat/history/?limit=50');
+      setMessages(response.data.messages.reverse());
+    } catch (err) {
+      console.error('Error fetching chat history:', err);
     }
   };
 
-  const sendMessage = async () => {
-    if (!prompt.trim()) return;
+  const sendMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentMessage.trim()) return;
 
-    setLoading(true);
+    setIsLoading(true);
+    setError('');
+
+    const userMessage = currentMessage;
+    setCurrentMessage('');
+
+    // Add user message to chat immediately
+    const tempMessage: ChatMessage = {
+      id: 'temp-' + Date.now(),
+      prompt: userMessage,
+      response: '',
+      created_at: new Date().toISOString(),
+      model: '',
+      tokens_used: 0,
+      response_time_ms: 0
+    };
+    setMessages(prev => [...prev, tempMessage]);
+
     try {
-      const response = await fetch(`${API_BASE}/api/chat/call/`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          prompt: prompt.trim(),
-          model,
-          seed: seed || undefined
-        })
+      const response = await axios.post('/api/chat/call/', {
+        prompt: userMessage,
+        model: 'gpt-3.5-turbo'
       });
 
-      if (response.ok) {
-        const data = await response.json();
+      if (response.data.success) {
+        // Remove temp message and add real message
+        setMessages(prev => prev.filter(msg => msg.id !== tempMessage.id));
+        
         const newMessage: ChatMessage = {
-          id: data.message_id,
-          prompt: data.prompt,
-          response: data.response,
+          id: response.data.message_id,
+          prompt: response.data.prompt,
+          response: response.data.response,
           created_at: new Date().toISOString(),
-          model: data.model,
+          model: response.data.model,
           tokens_used: 1,
-          response_time_ms: data.response_time_ms
+          response_time_ms: response.data.response_time_ms || 0
         };
         
-        setMessages(prev => [newMessage, ...prev]);
-        setPrompt('');
+        setMessages(prev => [...prev, newMessage]);
         
-        // Update tenant info with new token count
+        // Update tenant info
         if (tenantInfo) {
           setTenantInfo({
             ...tenantInfo,
-            tokens_remaining: data.tokens_remaining,
-            tokens_used: tenantInfo.tokens_used + 1
+            tokens_used: tenantInfo.tokens_used + 1,
+            tokens_remaining: tenantInfo.tokens_remaining - 1
           });
         }
       } else {
-        const errorData = await response.json();
-        alert(`Error: ${errorData.error} - ${errorData.message}`);
+        throw new Error('Failed to send message');
       }
-    } catch (error) {
-      console.error('Error sending message:', error);
-      alert('Network error occurred');
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Error sending message');
+      // Remove temp message on error
+      setMessages(prev => prev.filter(msg => msg.id !== tempMessage.id));
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   };
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      sendMessage();
-    }
+  const formatTime = (timestamp: string) => {
+    return new Date(timestamp).toLocaleTimeString();
   };
 
   return (
-    <div className="App">
-      <header className="chat-header">
-        <h1>Multi-Tenant Chat Interface</h1>
-        {tenantInfo && (
-          <div className="tenant-info">
-            <div className="tenant-name">{tenantInfo.name}</div>
-            <div className="token-usage">
-              Tokens: {tenantInfo.tokens_used}/{tenantInfo.tokens_limit} 
-              ({tenantInfo.tokens_remaining} remaining)
-            </div>
-          </div>
-        )}
-      </header>
-
+    <div className="app">
       <div className="chat-container">
-        <div className="chat-messages">
-          {messages.length === 0 ? (
-            <div className="no-messages">No messages yet. Start a conversation!</div>
-          ) : (
-            messages.map((message) => (
-              <div key={message.id} className="message-pair">
-                <div className="message user-message">
-                  <div className="message-content">{message.prompt}</div>
-                  <div className="message-meta">You</div>
-                </div>
-                <div className="message ai-message">
-                  <div className="message-content">{message.response}</div>
-                  <div className="message-meta">
-                    AI ({message.model}) • {message.response_time_ms}ms
-                  </div>
-                </div>
-              </div>
-            ))
+        {/* Header */}
+        <div className="chat-header">
+          <h1>💬 Multi-Tenant Chat</h1>
+          {tenantInfo && (
+            <div className="tenant-info">
+              <span className="tenant-name">{tenantInfo.name}</span>
+              <span className="token-info">
+                Tokens: {tenantInfo.tokens_used}/{tenantInfo.tokens_limit}
+              </span>
+            </div>
           )}
         </div>
 
-        <div className="chat-input-section">
-          <div className="model-settings">
-            <select 
-              value={model} 
-              onChange={(e) => setModel(e.target.value)}
-              className="model-select"
-            >
-              <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
-              <option value="gpt-4">GPT-4</option>
-              <option value="claude-3">Claude-3</option>
-            </select>
+        {/* Messages */}
+        <div className="messages-container">
+          {messages.length === 0 && !isLoading && (
+            <div className="welcome-message">
+              <h3>👋 Welcome to Multi-Tenant Chat!</h3>
+              <p>Start a conversation by typing a message below.</p>
+            </div>
+          )}
+          
+          {messages.map((message) => (
+            <div key={message.id} className="message-group">
+              <div className="message user-message">
+                <div className="message-content">
+                  <strong>You:</strong> {message.prompt}
+                </div>
+                <div className="message-time">{formatTime(message.created_at)}</div>
+              </div>
+              
+              {message.response && (
+                <div className="message ai-message">
+                  <div className="message-content">
+                    <strong>AI:</strong> {message.response}
+                  </div>
+                  <div className="message-meta">
+                    <span className="message-time">{formatTime(message.created_at)}</span>
+                    {message.response_time_ms > 0 && (
+                      <span className="response-time">
+                        ({message.response_time_ms}ms)
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+          
+          {isLoading && (
+            <div className="message ai-message loading">
+              <div className="message-content">
+                <div className="typing-indicator">
+                  <span></span>
+                  <span></span>
+                  <span></span>
+                </div>
+              </div>
+            </div>
+          )}
+          
+          <div ref={messagesEndRef} />
+        </div>
+
+        {/* Error */}
+        {error && (
+          <div className="error-message">
+            ⚠️ {error}
+          </div>
+        )}
+
+        {/* Input */}
+        <form onSubmit={sendMessage} className="message-form">
+          <div className="input-container">
             <input
               type="text"
-              placeholder="Seed (optional)"
-              value={seed}
-              onChange={(e) => setSeed(e.target.value)}
-              className="seed-input"
-            />
-          </div>
-          
-          <div className="chat-input">
-            <textarea
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              onKeyPress={handleKeyPress}
+              value={currentMessage}
+              onChange={(e) => setCurrentMessage(e.target.value)}
               placeholder="Type your message here..."
-              rows={3}
-              disabled={loading}
+              disabled={isLoading}
               className="message-input"
             />
-            <button 
-              onClick={sendMessage}
-              disabled={loading || !prompt.trim()}
+            <button
+              type="submit"
+              disabled={isLoading || !currentMessage.trim()}
               className="send-button"
             >
-              {loading ? 'Sending...' : 'Send'}
+              {isLoading ? '⏳' : '📤'}
             </button>
           </div>
-        </div>
+        </form>
       </div>
     </div>
   );
-}
+};
 
 export default App;

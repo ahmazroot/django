@@ -19,7 +19,7 @@ localPort = 3000
 externalPort = 80
 
 [workflows]
-runButton = "Run Django Server"
+runButton = "Run Backend Only"
 
 [[workflows.workflow]]
 name = "Run Django Server"
@@ -29,3 +29,25 @@ mode = "sequential"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "python manage.py runserver 0.0.0.0:3000"
+
+[[workflows.workflow]]
+name = "Run Backend Only"
+author = 46884935
+mode = "sequential"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd backend && python manage.py runserver 0.0.0.0:3000"
+
+[[workflows.workflow]]
+name = "Run Full Stack"
+author = 46884935
+mode = "parallel"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd backend && python manage.py runserver 0.0.0.0:3000"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd frontend && npm start"

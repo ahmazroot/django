@@ -105,5 +105,26 @@ Each tenant is identified by their domain:
 The application uses:
 - Django development server for backend API
 - React development server with hot reload
-- CORS headers for cross-origin requests
-- Proxy configuration for seamless development
+- CORS enabled for cross-origin requests
+- TypeScript for type safety
+
+## Features
+
+### Chat Interface
+- Modern, responsive chat UI
+- Real-time message display
+- Typing indicators
+- Message history
+- Token usage tracking
+
+### Multi-Tenant Support
+- Host header identification
+- Tenant-specific configurations
+- Shared database with data isolation
+- Token limit management
+
+### API Integration
+- External AI API integration
+- Configurable model parameters
+- Response time tracking
+- Error handling

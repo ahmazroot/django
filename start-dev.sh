@@ -13,7 +13,7 @@ sleep 3
 
 # Start React frontend
 echo "Starting React frontend on port 3001..."
-cd frontend && npm start &
+cd ../frontend && npm start &
 FRONTEND_PID=$!
 
 echo "Backend PID: $BACKEND_PID"
