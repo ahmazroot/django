@@ -1,0 +1,272 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multi-Tenant Chat API Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .chat-box {
+            height: 400px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            padding: 10px;
+            margin: 10px 0;
+            background: #fafafa;
+        }
+        .message {
+            margin: 10px 0;
+            padding: 8px;
+            border-radius: 4px;
+        }
+        .user-message {
+            background: #e3f2fd;
+            text-align: right;
+        }
+        .ai-message {
+            background: #f3e5f5;
+        }
+        .input-group {
+            display: flex;
+            gap: 10px;
+            margin: 10px 0;
+        }
+        input[type="text"], textarea {
+            flex: 1;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        button {
+            padding: 8px 16px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        .info-panel {
+            background: #e8f5e8;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .error {
+            background: #ffe6e6;
+            color: #d00;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Multi-Tenant Chat API Test</h1>
+        
+        <div class="info-panel" id="tenantInfo">
+            <h3>Tenant Information</h3>
+            <div id="tenantDetails">Loading...</div>
+        </div>
+        
+        <div class="chat-box" id="chatBox"></div>
+        
+        <div class="input-group">
+            <textarea id="promptInput" placeholder="Enter your message..." rows="2"></textarea>
+            <button onclick="sendMessage()">Send</button>
+        </div>
+        
+        <div class="input-group">
+            <input type="text" id="modelInput" placeholder="Model (default: gpt-3.5-turbo)" />
+            <input type="text" id="seedInput" placeholder="Seed (optional)" />
+            <button onclick="loadHistory()">Load History</button>
+        </div>
+        
+        <h3>Customer Management</h3>
+        <div class="input-group">
+            <input type="text" id="customerName" placeholder="Customer Name" />
+            <input type="email" id="customerEmail" placeholder="Customer Email" />
+            <button onclick="addCustomer()">Add Customer</button>
+        </div>
+    </div>
+
+    <script>
+        let currentTenant = null;
+
+        // Load tenant info on page load
+        window.addEventListener('load', function() {
+            loadTenantInfo();
+        });
+
+        async function loadTenantInfo() {
+            try {
+                const response = await fetch('/api/tenant/info/');
+                const data = await response.json();
+                
+                if (data.success) {
+                    currentTenant = data.tenant;
+                    document.getElementById('tenantDetails').innerHTML = `
+                        <strong>Name:</strong> ${data.tenant.name}<br>
+                        <strong>Domain:</strong> ${data.tenant.domain}<br>
+                        <strong>Tokens:</strong> ${data.tenant.tokens_used}/${data.tenant.tokens_limit} 
+                        (${data.tenant.tokens_remaining} remaining)
+                    `;
+                } else {
+                    showError('Failed to load tenant info: ' + (data.message || data.error));
+                }
+            } catch (error) {
+                showError('Error loading tenant info: ' + error.message);
+            }
+        }
+
+        async function sendMessage() {
+            const prompt = document.getElementById('promptInput').value.trim();
+            if (!prompt) {
+                showError('Please enter a message');
+                return;
+            }
+
+            const model = document.getElementById('modelInput').value.trim() || 'gpt-3.5-turbo';
+            const seed = document.getElementById('seedInput').value.trim();
+
+            const payload = { prompt, model };
+            if (seed) payload.seed = seed;
+
+            addMessageToChat('You: ' + prompt, 'user-message');
+            document.getElementById('promptInput').value = '';
+
+            try {
+                const response = await fetch('/api/chat/call/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                const data = await response.json();
+                
+                if (data.success) {
+                    addMessageToChat(`AI (${data.response_time_ms}ms): ${data.response}`, 'ai-message');
+                    // Update token count
+                    loadTenantInfo();
+                } else {
+                    showError('Chat API Error: ' + (data.message || data.error));
+                }
+            } catch (error) {
+                showError('Error sending message: ' + error.message);
+            }
+        }
+
+        async function loadHistory() {
+            try {
+                const response = await fetch('/api/chat/history/?limit=20');
+                const data = await response.json();
+                
+                if (data.success) {
+                    const chatBox = document.getElementById('chatBox');
+                    chatBox.innerHTML = '<h4>Recent Chat History:</h4>';
+                    
+                    data.messages.reverse().forEach(message => {
+                        addMessageToChat(`You: ${message.prompt}`, 'user-message', false);
+                        addMessageToChat(`AI (${message.response_time_ms || 0}ms): ${message.response}`, 'ai-message', false);
+                    });
+                    
+                    chatBox.scrollTop = chatBox.scrollHeight;
+                } else {
+                    showError('Failed to load history: ' + (data.message || data.error));
+                }
+            } catch (error) {
+                showError('Error loading history: ' + error.message);
+            }
+        }
+
+        async function addCustomer() {
+            const name = document.getElementById('customerName').value.trim();
+            const email = document.getElementById('customerEmail').value.trim();
+            
+            if (!name) {
+                showError('Please enter customer name');
+                return;
+            }
+
+            const payload = { name };
+            if (email) payload.email = email;
+
+            try {
+                const response = await fetch('/api/customer/add/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                const data = await response.json();
+                
+                if (data.success) {
+                    addMessageToChat(`✓ Customer added: ${data.name} (ID: ${data.customer_id.substring(0,8)}...)`, 'ai-message');
+                    document.getElementById('customerName').value = '';
+                    document.getElementById('customerEmail').value = '';
+                } else {
+                    showError('Failed to add customer: ' + (data.message || data.error));
+                }
+            } catch (error) {
+                showError('Error adding customer: ' + error.message);
+            }
+        }
+
+        function addMessageToChat(message, className, scroll = true) {
+            const chatBox = document.getElementById('chatBox');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${className}`;
+            messageDiv.textContent = message;
+            chatBox.appendChild(messageDiv);
+            
+            if (scroll) {
+                chatBox.scrollTop = chatBox.scrollHeight;
+            }
+        }
+
+        function showError(message) {
+            const existingError = document.querySelector('.error');
+            if (existingError) {
+                existingError.remove();
+            }
+            
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'error';
+            errorDiv.textContent = message;
+            document.querySelector('.container').appendChild(errorDiv);
+            
+            setTimeout(() => {
+                errorDiv.remove();
+            }, 5000);
+        }
+
+        // Allow Enter key to send message
+        document.getElementById('promptInput').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+    </script>
+</body>
+</html>
