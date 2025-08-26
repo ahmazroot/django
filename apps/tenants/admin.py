@@ -38,6 +38,6 @@ class ChatMessageAdmin(admin.ModelAdmin):
     search_fields = ['tenant__name', 'user_prompt', 'ai_response']
     readonly_fields = ['id', 'created_at']
     
+    @admin.display(description='Prompt Preview')
     def user_prompt_preview(self, obj):
         return obj.user_prompt[:50] + '...' if len(obj.user_prompt) > 50 else obj.user_prompt
-    user_prompt_preview.short_description = 'Prompt Preview'
